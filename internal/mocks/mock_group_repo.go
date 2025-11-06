@@ -1,7 +1,7 @@
 package mocks
 
 import (
-	"github.com/happYness-Project/taskManagementGolang/internal/usergroup/model"
+	"github.com/happYness-Project/taskManagementGolang/internal/usergroup/domain"
 	"github.com/stretchr/testify/mock"
 )
 
@@ -14,21 +14,21 @@ func (m *MockUserGroupRepo) DeleteUserGroup(id int) error {
 }
 
 // GetAllUsergroups implements repository.UserGroupRepository.
-func (m *MockUserGroupRepo) GetAllUsergroups() ([]*model.UserGroup, error) {
+func (m *MockUserGroupRepo) GetAllUsergroups() ([]*domain.UserGroup, error) {
 	args := m.Called()
-	return args.Get(0).([]*model.UserGroup), args.Error(1)
+	return args.Get(0).([]*domain.UserGroup), args.Error(1)
 }
 
 // GetById implements repository.UserGroupRepository.
-func (m *MockUserGroupRepo) GetById(id int) (*model.UserGroup, error) {
+func (m *MockUserGroupRepo) GetById(id int) (*domain.UserGroup, error) {
 	args := m.Called(id)
-	return args.Get(0).(*model.UserGroup), args.Error(1)
+	return args.Get(0).(*domain.UserGroup), args.Error(1)
 }
 
 // GetUserGroupsByUserId implements repository.UserGroupRepository.
-func (m *MockUserGroupRepo) GetUserGroupsByUserId(userId int) ([]*model.UserGroup, error) {
+func (m *MockUserGroupRepo) GetUserGroupsByUserId(userId int) ([]*domain.UserGroup, error) {
 	args := m.Called(userId)
-	return args.Get(0).([]*model.UserGroup), args.Error(1)
+	return args.Get(0).([]*domain.UserGroup), args.Error(1)
 }
 
 // InsertUserGroupUserTable implements repository.UserGroupRepository.
@@ -41,7 +41,7 @@ func (m *MockUserGroupRepo) RemoveUserFromUserGroup(groupId int, userId int) err
 	args := m.Called(groupId, userId)
 	return args.Error(0)
 }
-func (m *MockUserGroupRepo) CreateGroupWithUsers(ug model.UserGroup, userId int) (int, error) {
+func (m *MockUserGroupRepo) CreateGroupWithUsers(ug domain.UserGroup, userId int) (int, error) {
 	args := m.Called(ug, userId)
 	return args.Get(0).(int), args.Error(0)
 }

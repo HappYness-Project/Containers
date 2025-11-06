@@ -106,9 +106,9 @@ func (h *Handler) handleGetUsersByGroupId(w http.ResponseWriter, r *http.Request
 	}
 
 	usersWithRoles, err := h.userRepo.GetUsersByGroupIdWithRoles(groupId)
-	if err != nil { // should split two error - one is not found, the other is badrequest / server side error.
+	if err != nil {
 		h.logger.Error().Err(err).Msg("Error during Get Users by Group ID with Roles")
-		response.NotFound(w, UserGetNotFound, err.Error())
+		response.InternalServerError(w, "Error occurred during retrieving users by group ID")
 		return
 	}
 

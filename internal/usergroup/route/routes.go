@@ -9,24 +9,28 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/jwtauth"
 	userRepo "github.com/happYness-Project/taskManagementGolang/internal/user/repository"
-	userGroupRepo "github.com/happYness-Project/taskManagementGolang/internal/usergroup/repository"
+	"github.com/happYness-Project/taskManagementGolang/internal/usergroup/application"
 
-	"github.com/happYness-Project/taskManagementGolang/internal/usergroup/model"
 	"github.com/happYness-Project/taskManagementGolang/internal/usergroup/repository"
 	"github.com/happYness-Project/taskManagementGolang/pkg/constants"
-	"github.com/happYness-Project/taskManagementGolang/pkg/errors"
 	"github.com/happYness-Project/taskManagementGolang/pkg/loggers"
 	"github.com/happYness-Project/taskManagementGolang/pkg/response"
 )
 
 type Handler struct {
-	logger    *loggers.AppLogger
-	groupRepo userGroupRepo.UserGroupRepository
-	userRepo  userRepo.UserRepository
+	logger         *loggers.AppLogger
+	commandHandler *application.UserGroupCommandHandler
+	queryHandler   *application.UserGroupQueryHandler
 }
 
 func NewHandler(logger *loggers.AppLogger, repo repository.UserGroupRepository, userRepo userRepo.UserRepository) *Handler {
-	return &Handler{logger: logger, groupRepo: repo, userRepo: userRepo}
+	commandHandler := application.NewUserGroupCommandHandler(repo, userRepo)
+	queryHandler := application.NewUserGroupQueryHandler(repo, userRepo)
+	return &Handler{
+		logger:         logger,
+		commandHandler: commandHandler,
+		queryHandler:   queryHandler,
+	}
 }
 func (h *Handler) RegisterRoutes(router chi.Router) {
 	router.Route("/api/user-groups", func(r chi.Router) {
@@ -42,13 +46,14 @@ func (h *Handler) RegisterRoutes(router chi.Router) {
 }
 
 func (h *Handler) handleGetUserGroups(w http.ResponseWriter, r *http.Request) {
-	groups, err := h.groupRepo.GetAllUsergroups()
+	// Use Query Handler
+	groups, err := h.queryHandler.HandleGetAllGroups(application.GetAllGroupsQuery{})
 	if err != nil {
-		h.logger.Error().Err(err).Str("ErrorCode", constants.ServerError).Msg("Error occurred during responseUser.")
+		h.logger.Error().Err(err).Str("ErrorCode", constants.ServerError).Msg("Error occurred during getting groups.")
 		response.InternalServerError(w)
 		return
 	}
-	response.WriteJsonWithEncode(w, http.StatusOK, groups) // TODO this response format needs to be changed.
+	response.WriteJsonWithEncode(w, http.StatusOK, groups)
 }
 func (h *Handler) handleGetUserGroupById(w http.ResponseWriter, r *http.Request) {
 	groupId, err := strconv.Atoi(chi.URLParam(r, "groupID"))
@@ -58,22 +63,17 @@ func (h *Handler) handleGetUserGroupById(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	group, err := h.groupRepo.GetById(groupId)
-	if group.GroupId == 0 {
-		h.logger.Error().Str("ErrorCode", UserGroupGetNotFound).Msg(fmt.Sprintf("group does not exist. group Id: %d", groupId))
+	// Use Query Handler
+	group, err := h.queryHandler.HandleGetGroupById(application.GetGroupByIdQuery{GroupId: groupId})
+	if err != nil {
+		h.logger.Error().Err(err).Str("ErrorCode", UserGroupGetNotFound).Msg(err.Error())
 		response.NotFound(w, UserGroupGetNotFound, "group does not exist")
 		return
 	}
 
-	if err != nil {
-		h.logger.Error().Err(err).Str("ErrorCode", UserGroupServerError).Msg(err.Error())
-		response.ErrorResponse(w, http.StatusBadRequest, *response.New(UserGroupServerError, "Bad Request", "Error occurred during retrieving by group id"))
-		return
-	}
 	response.WriteJsonWithEncode(w, http.StatusOK, group)
 }
 
-// TODO List Testing this method
 func (h *Handler) handleCreateUserGroup(w http.ResponseWriter, r *http.Request) {
 	var createDto CreateUserGroupDto
 	if err := response.ParseJson(r, &createDto); err != nil {
@@ -81,26 +81,23 @@ func (h *Handler) handleCreateUserGroup(w http.ResponseWriter, r *http.Request) 
 		response.InternalServerError(w)
 		return
 	}
+
+	// Get user ID from JWT
 	_, claims, _ := jwtauth.FromContext(r.Context())
 	userid := fmt.Sprintf("%v", claims["nameid"])
-	user, err := h.userRepo.GetUserByUserId(userid)
-	if err != nil || user == nil {
-		h.logger.Error().Err(err).Str("ErrorCode", UserGroupGetNotFound).Msg("Not able to find user ID:" + userid)
-		response.ErrorResponse(w, http.StatusNotFound, *(response.New(constants.ServerError, errors.InternalServerError)))
-		return
+
+	// Use Command Handler
+	cmd := application.CreateGroupCommand{
+		GroupName: createDto.GroupName,
+		GroupDesc: createDto.GroupDesc,
+		GroupType: createDto.GroupType,
+		CreatorId: userid,
 	}
 
-	group, err := model.NewUserGroup(createDto.GroupName, createDto.GroupDesc, createDto.GroupType)
-	if err != nil {
-		h.logger.Error().Err(err).Str("ErrorCode", UserGroupDomainError).Msg(err.Error())
-		response.ErrorResponse(w, http.StatusUnprocessableEntity, *response.New(UserGroupDomainError, "Domain Validation Error", err.Error()))
-		return
-	}
-
-	groupId, err := h.groupRepo.CreateGroupWithUsers(*group, user.Id)
+	groupId, err := h.commandHandler.HandleCreateGroup(cmd)
 	if err != nil {
 		h.logger.Error().Err(err).Str("ErrorCode", UserGroupCreationFailure).Msg(err.Error())
-		response.ErrorResponse(w, http.StatusBadRequest, *response.New(UserGroupCreationFailure, "Inserting usergroup failed"))
+		response.ErrorResponse(w, http.StatusBadRequest, *response.New(UserGroupCreationFailure, "Failed to create group", err.Error()))
 		return
 	}
 
@@ -115,19 +112,14 @@ func (h *Handler) handleGetUserGroupByUserId(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	user, err := h.userRepo.GetUserByUserId(userId)
+	// Use Query Handler
+	groups, err := h.queryHandler.HandleGetGroupsByUserId(application.GetGroupsByUserIdQuery{UserId: userId})
 	if err != nil {
-		h.logger.Error().Err(err).Str("ErrorCode", UserNotFound).Msg("Error during GetUserByUserId")
-		response.NotFound(w, UserNotFound, "Not able to find a user")
+		h.logger.Error().Err(err).Str("ErrorCode", UserGroupGetNotFound).Msg(err.Error())
+		response.NotFound(w, UserGroupGetNotFound, "Not able to find user groups")
 		return
 	}
 
-	groups, err := h.groupRepo.GetUserGroupsByUserId(user.Id)
-	if err != nil {
-		h.logger.Error().Err(err).Str("ErrorCode", UserGroupGetNotFound).Msg("Error during GetUserGroupsByUserId")
-		response.NotFound(w, UserGroupGetNotFound, "Not able to find usegroups")
-		return
-	}
 	response.WriteJsonWithEncode(w, http.StatusOK, groups)
 }
 
@@ -145,22 +137,21 @@ func (h *Handler) handleAddUserToGroup(w http.ResponseWriter, r *http.Request) {
 	var jsonBody JsonBody
 	err = json.NewDecoder(r.Body).Decode(&jsonBody)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
 		h.logger.Error().Err(err).Str("ErrorCode", constants.RequestBodyError)
 		response.InvalidJsonBody(w, err.Error())
 		return
 	}
-	user, err := h.userRepo.GetUserByUserId(jsonBody.UserId)
-	if err != nil || user == nil {
-		h.logger.Error().Err(err).Str("ErrorCode", UserNotFound)
-		response.NotFound(w, UserNotFound, "cannot find an user")
-		return
+
+	// Use Command Handler
+	cmd := application.AddMemberCommand{
+		GroupId: groupId,
+		UserId:  jsonBody.UserId,
 	}
 
-	err = h.groupRepo.InsertUserGroupUserTable(groupId, user.Id)
+	err = h.commandHandler.HandleAddMember(cmd)
 	if err != nil {
-		h.logger.Error().Err(err).Str("ErrorCode", UserGroupAddUserError).Msg("Error during InsertUserGroupUserTable")
-		response.ErrorResponse(w, http.StatusBadRequest, *response.New(UserGroupAddUserError, "Bad Request", "Inserting usergroup failed"))
+		h.logger.Error().Err(err).Str("ErrorCode", UserGroupAddUserError).Msg(err.Error())
+		response.ErrorResponse(w, http.StatusBadRequest, *response.New(UserGroupAddUserError, "Bad Request", err.Error()))
 		return
 	}
 
@@ -174,14 +165,17 @@ func (h *Handler) handleDeleteUserGroup(w http.ResponseWriter, r *http.Request) 
 		response.BadRequestMissingParameters(w, "invalid groupId")
 		return
 	}
-	err = h.groupRepo.DeleteUserGroup(groupId)
+
+	// Use Command Handler
+	cmd := application.DeleteGroupCommand{GroupId: groupId}
+	err = h.commandHandler.HandleDeleteGroup(cmd)
 	if err != nil {
 		h.logger.Error().Err(err).Str("ErrorCode", DeleteUserGroupError).Msg(err.Error())
-		// TODO : Possible error can occur if not found.
-		response.ErrorResponse(w, http.StatusBadRequest, *(response.New(DeleteUserGroupError, "Bad Request", "Error occurred during deleting user group.")))
+		response.ErrorResponse(w, http.StatusBadRequest, *response.New(DeleteUserGroupError, "Bad Request", err.Error()))
 		return
 	}
-	response.SuccessJson(w, nil, fmt.Sprintf("User is removed from user group ID: %d", groupId), 204)
+
+	response.SuccessJson(w, nil, fmt.Sprintf("User group ID %d deleted successfully", groupId), 204)
 }
 
 func (h *Handler) handleRemoveUserFromGroup(w http.ResponseWriter, r *http.Request) {
@@ -194,34 +188,25 @@ func (h *Handler) handleRemoveUserFromGroup(w http.ResponseWriter, r *http.Reque
 	groupId, err := strconv.Atoi(vars)
 	if err != nil {
 		h.logger.Error().Err(err).Str("ErrorCode", constants.InvalidParameter).Msg(err.Error())
-		response.ErrorResponse(w, http.StatusBadRequest, *(response.New(constants.InvalidParameter, "Invalid Parameter", "Invalid Group ID")))
+		response.ErrorResponse(w, http.StatusBadRequest, *response.New(constants.InvalidParameter, "Invalid Parameter", "Invalid Group ID"))
 		return
 	}
+
 	userId := chi.URLParam(r, "userID")
-	user, err := h.userRepo.GetUserByUserId(userId)
-	if err != nil || user == nil {
-		h.logger.Error().Err(err).Str("ErrorCode", UserNotFound).Msg(err.Error())
-		response.NotFound(w, UserNotFound, "Provided user id cannot be found")
-		return
+
+	// Use Command Handler (it handles the default group clearing logic)
+	cmd := application.RemoveMemberCommand{
+		GroupId: groupId,
+		UserId:  userId,
 	}
 
-	// Check if user's default group matches the group they're being removed from
-	if user.DefaultGroupId == groupId {
-		// Clear the default group since they're being removed
-		user.ClearDefaultGroup()
-		err = h.userRepo.UpdateUser(*user)
-		if err != nil {
-			h.logger.Error().Err(err).Str("ErrorCode", "UpdateUserError").Msg("Failed to clear default group")
-			// Continue with removal even if this fails - log but don't block
-		}
-	}
-
-	err = h.groupRepo.RemoveUserFromUserGroup(groupId, user.Id)
+	err = h.commandHandler.HandleRemoveMember(cmd)
 	if err != nil {
 		h.logger.Error().Err(err).Str("ErrorCode", RemoveUserFromUserGroupError).Msg(err.Error())
-		response.ErrorResponse(w, http.StatusBadRequest, *(response.New(RemoveUserFromUserGroupError, "Bad Request", "Failed to remove a user from usergroup.")))
+		response.ErrorResponse(w, http.StatusBadRequest, *response.New(RemoveUserFromUserGroupError, "Bad Request", err.Error()))
 		return
 	}
+
 	response.SuccessJson(w, nil, fmt.Sprintf("User is removed from user group ID: %d", groupId), 204)
 }
 
@@ -234,12 +219,6 @@ func (h *Handler) handleUpdateUserRoleInGroup(w http.ResponseWriter, r *http.Req
 	}
 
 	userId := chi.URLParam(r, "userID")
-	user, err := h.userRepo.GetUserByUserId(userId)
-	if err != nil || user == nil {
-		h.logger.Error().Err(err).Str("ErrorCode", UserNotFound).Msg("User not found")
-		response.NotFound(w, UserNotFound, "Provided user id cannot be found")
-		return
-	}
 
 	var updateDto UpdateUserRoleDto
 	if err := response.ParseJson(r, &updateDto); err != nil {
@@ -248,16 +227,17 @@ func (h *Handler) handleUpdateUserRoleInGroup(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	if updateDto.Role != "admin" && updateDto.Role != "member" {
-		h.logger.Error().Str("ErrorCode", constants.InvalidParameter).Msg("Invalid role value")
-		response.ErrorResponse(w, http.StatusBadRequest, *response.New(constants.InvalidParameter, "Invalid Parameter", "Role must be 'admin' or 'member'"))
-		return
+	// Use Command Handler (it validates the role using the Role value object)
+	cmd := application.ChangeMemberRoleCommand{
+		GroupId: groupId,
+		UserId:  userId,
+		NewRole: updateDto.Role,
 	}
 
-	err = h.groupRepo.UpdateUserRoleInGroup(groupId, user.Id, updateDto.Role)
+	err = h.commandHandler.HandleChangeMemberRole(cmd)
 	if err != nil {
-		h.logger.Error().Err(err).Str("ErrorCode", UpdateUserRoleError).Msg("Error updating user role")
-		response.ErrorResponse(w, http.StatusBadRequest, *response.New(UpdateUserRoleError, "Bad Request", "Failed to update user role in group"))
+		h.logger.Error().Err(err).Str("ErrorCode", UpdateUserRoleError).Msg(err.Error())
+		response.ErrorResponse(w, http.StatusBadRequest, *response.New(UpdateUserRoleError, "Bad Request", err.Error()))
 		return
 	}
 

@@ -1,5 +1,3 @@
-version: '3'
-
 services:
   db:
     image: postgres:latest  # Use the latest PostgreSQL image
@@ -10,10 +8,10 @@ services:
     ports:
       - "8010:5432"
     volumes:
-      - ./postgres-data:/var/lib/postgresql/data
+      - ./postgres-data:/var/lib/postgresql
       - ./sql/create_tables.sql:/docker-entrypoint-initdb.d/create_tables.sql
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres"]  # Check if PostgreSQL is ready
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
       interval: 10s
       timeout: 5s
       retries: 5
