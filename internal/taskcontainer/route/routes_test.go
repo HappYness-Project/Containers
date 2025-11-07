@@ -9,7 +9,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/happYness-Project/taskManagementGolang/internal/mocks"
-	"github.com/happYness-Project/taskManagementGolang/internal/taskcontainer/model"
+	"github.com/happYness-Project/taskManagementGolang/internal/taskcontainer/domain"
 	"github.com/happYness-Project/taskManagementGolang/pkg/configs"
 	"github.com/happYness-Project/taskManagementGolang/pkg/loggers"
 	"github.com/stretchr/testify/assert"
@@ -25,7 +25,7 @@ func TestTaskContainerHandler(t *testing.T) {
 
 	t.Run("when get all task containers, Then return status code 200 and containers array", func(t *testing.T) {
 		// Arrange
-		expectedContainers := []*model.TaskContainer{
+		expectedContainers := []*domain.TaskContainer{
 			{Id: "1", Name: "Container1", Description: "Desc1", Type: "typeA", IsActive: true, Activity_level: 0, UsergroupId: 2},
 		}
 		mockContainerRepo.On("AllTaskContainers").Return(expectedContainers, nil)
@@ -39,7 +39,7 @@ func TestTaskContainerHandler(t *testing.T) {
 
 		// Assert
 		assert.Equal(t, http.StatusOK, rr.Code)
-		var containers []*model.TaskContainer
+		var containers []*domain.TaskContainer
 		err := json.Unmarshal(rr.Body.Bytes(), &containers)
 		require.NoError(t, err)
 		assert.Len(t, containers, 1)
@@ -55,7 +55,7 @@ func TestTaskContainerHandler(t *testing.T) {
 
 	t.Run("when get task container by containerId, Then return status code 200 and container", func(t *testing.T) {
 		containerId := "abcd"
-		expectedContainer := &model.TaskContainer{Id: containerId, Name: "Container2", Description: "Desc2", Type: "typeB", IsActive: false, Activity_level: 1, UsergroupId: 3}
+		expectedContainer := &domain.TaskContainer{Id: containerId, Name: "Container2", Description: "Desc2", Type: "typeB", IsActive: false, Activity_level: 1, UsergroupId: 3}
 		mockContainerRepo.On("GetById", containerId).Return(expectedContainer, nil)
 		req := httptest.NewRequest(http.MethodGet, "/api/task-containers/"+containerId, nil)
 		rr := httptest.NewRecorder()
@@ -67,7 +67,7 @@ func TestTaskContainerHandler(t *testing.T) {
 
 		// Assert
 		assert.Equal(t, http.StatusOK, rr.Code)
-		var container model.TaskContainer
+		var container domain.TaskContainer
 		err := json.Unmarshal(rr.Body.Bytes(), &container)
 		require.NoError(t, err)
 		assert.Equal(t, expectedContainer.Id, container.Id)
@@ -83,16 +83,16 @@ func TestTaskContainerHandler(t *testing.T) {
 
 type mockContainerRepo struct{}
 
-func (m *mockContainerRepo) AllTaskContainers() ([]*model.TaskContainer, error) {
-	return []*model.TaskContainer{}, nil
+func (m *mockContainerRepo) AllTaskContainers() ([]*domain.TaskContainer, error) {
+	return []*domain.TaskContainer{}, nil
 }
-func (m *mockContainerRepo) GetById(id string) (*model.TaskContainer, error) {
-	return &model.TaskContainer{}, nil
+func (m *mockContainerRepo) GetById(id string) (*domain.TaskContainer, error) {
+	return &domain.TaskContainer{}, nil
 }
-func (m *mockContainerRepo) GetContainersByGroupId(groupId int) ([]model.TaskContainer, error) {
-	return []model.TaskContainer{}, nil
+func (m *mockContainerRepo) GetContainersByGroupId(groupId int) ([]domain.TaskContainer, error) {
+	return []domain.TaskContainer{}, nil
 }
-func (m *mockContainerRepo) CreateContainer(c model.TaskContainer) error {
+func (m *mockContainerRepo) CreateContainer(c domain.TaskContainer) error {
 	return nil
 }
 func (m *mockContainerRepo) DeleteContainer(id string) error {

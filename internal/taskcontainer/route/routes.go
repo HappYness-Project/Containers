@@ -5,8 +5,9 @@ import (
 	"strconv"
 
 	"github.com/go-chi/chi/v5"
-	"github.com/google/uuid"
-	"github.com/happYness-Project/taskManagementGolang/internal/taskcontainer/model"
+	"github.com/happYness-Project/taskManagementGolang/internal/taskcontainer/application"
+	"github.com/happYness-Project/taskManagementGolang/internal/taskcontainer/application/command"
+	"github.com/happYness-Project/taskManagementGolang/internal/taskcontainer/application/query"
 	container "github.com/happYness-Project/taskManagementGolang/internal/taskcontainer/repository"
 	user "github.com/happYness-Project/taskManagementGolang/internal/user/repository"
 	"github.com/happYness-Project/taskManagementGolang/pkg/constants"
@@ -15,13 +16,17 @@ import (
 )
 
 type Handler struct {
-	logger        *loggers.AppLogger
-	containerRepo container.ContainerRepository
-	userRepo      user.UserRepository
+	logger     *loggers.AppLogger
+	commandBus *application.CommandBus
+	queryBus   *application.QueryBus
 }
 
 func NewHandler(logger *loggers.AppLogger, repo container.ContainerRepository, userRepo user.UserRepository) *Handler {
-	return &Handler{logger: logger, containerRepo: repo, userRepo: userRepo}
+	return &Handler{
+		logger:     logger,
+		commandBus: application.NewCommandBus(repo),
+		queryBus:   application.NewQueryBus(repo),
+	}
 }
 func (h *Handler) RegisterRoutes(router chi.Router) {
 	router.Route("/api/task-containers", func(r chi.Router) {
@@ -33,13 +38,14 @@ func (h *Handler) RegisterRoutes(router chi.Router) {
 	router.Get("/api/user-groups/{usergroupID}/task-containers", h.handleGetTaskContainersByGroupId)
 }
 func (h *Handler) handleGetTaskContainers(w http.ResponseWriter, r *http.Request) {
-	containers, err := h.containerRepo.AllTaskContainers()
+	// Use Query Bus
+	result, err := h.queryBus.Execute(query.GetAllContainersQuery{})
 	if err != nil {
 		h.logger.Error().Err(err).Str("ErrorCode", TaskContainerGetError).Msg(err.Error())
 		response.InternalServerError(w, "Error occurred during getting all task containers.")
 		return
 	}
-	response.WriteJsonWithEncode(w, http.StatusOK, containers)
+	response.WriteJsonWithEncode(w, http.StatusOK, result)
 }
 func (h *Handler) handleGetTaskContainerById(w http.ResponseWriter, r *http.Request) {
 	containerId := chi.URLParam(r, "containerID")
@@ -48,13 +54,15 @@ func (h *Handler) handleGetTaskContainerById(w http.ResponseWriter, r *http.Requ
 		response.BadRequestMissingParameters(w, "Missing container ID")
 		return
 	}
-	container, err := h.containerRepo.GetById(containerId)
+
+	// Use Query Bus
+	result, err := h.queryBus.Execute(query.GetContainerByIdQuery{ContainerId: containerId})
 	if err != nil {
 		h.logger.Error().Err(err).Str("ErrorCode", TaskContainerGetNotFound).Msg(err.Error())
 		response.NotFound(w, TaskContainerGetNotFound, "Container does not exist")
 		return
 	}
-	response.WriteJsonWithEncode(w, http.StatusOK, container)
+	response.WriteJsonWithEncode(w, http.StatusOK, result)
 }
 func (h *Handler) handleGetTaskContainersByGroupId(w http.ResponseWriter, r *http.Request) {
 	groupIdVar := chi.URLParam(r, "usergroupID")
@@ -70,13 +78,14 @@ func (h *Handler) handleGetTaskContainersByGroupId(w http.ResponseWriter, r *htt
 		return
 	}
 
-	containers, err := h.containerRepo.GetContainersByGroupId(groupId)
+	// Use Query Bus
+	result, err := h.queryBus.Execute(query.GetContainersByGroupIdQuery{GroupId: groupId})
 	if err != nil {
 		h.logger.Error().Err(err).Str("ErrorCode", TaskContainerGetNotFound).Msg(err.Error())
 		response.NotFound(w, TaskContainerGetNotFound, "Error occurred during retrieving containers by group id")
 		return
 	}
-	response.WriteJsonWithEncode(w, http.StatusOK, containers)
+	response.WriteJsonWithEncode(w, http.StatusOK, result)
 }
 func (h *Handler) handleCreateTaskContainer(w http.ResponseWriter, r *http.Request) {
 	var createDto CreateContainerDto
@@ -86,25 +95,35 @@ func (h *Handler) handleCreateTaskContainer(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	container := model.TaskContainer{
-		Id:             uuid.New().String(),
-		Name:           createDto.Name,
-		Description:    createDto.Description,
-		Type:           createDto.Type,
-		IsActive:       true,
-		Activity_level: 0,
-		UsergroupId:    createDto.UserGroupId,
+	// Use Command Bus
+	cmd := command.CreateContainerCommand{
+		Name:        createDto.Name,
+		Description: createDto.Description,
+		Type:        createDto.Type,
+		UserGroupId: createDto.UserGroupId,
 	}
-	_ = h.containerRepo.CreateContainer(container)
-	response.WriteJsonWithEncode(w, http.StatusCreated, container.Id)
+
+	result, err := h.commandBus.Execute(cmd)
+	if err != nil {
+		h.logger.Error().Err(err).Str("ErrorCode", TaskContainerServerError).Msg(err.Error())
+		response.InternalServerError(w, "Error occurred during creating container")
+		return
+	}
+
+	containerId := result.(string)
+	response.WriteJsonWithEncode(w, http.StatusCreated, containerId)
 }
 func (h *Handler) handleDeleteTaskContainer(w http.ResponseWriter, r *http.Request) {
 	containerId := chi.URLParam(r, "containerID")
-	err := h.containerRepo.DeleteContainer(containerId)
+
+	// Use Command Bus
+	cmd := command.DeleteContainerCommand{ContainerId: containerId}
+	_, err := h.commandBus.Execute(cmd)
 	if err != nil {
 		h.logger.Error().Err(err).Str("ErrorCode", DeleteTaskContainerError).Msg(err.Error())
 		response.NotFound(w, DeleteTaskContainerError, "Error occurred during delete container")
 		return
 	}
+
 	response.WriteJsonWithEncode(w, http.StatusNoContent, "task container is removed.")
 }

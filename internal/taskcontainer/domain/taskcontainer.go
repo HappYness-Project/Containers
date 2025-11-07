@@ -1,4 +1,4 @@
-package model
+package domain
 
 type TaskContainer struct {
 	Id             string `json:"id"`

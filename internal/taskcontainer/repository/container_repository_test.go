@@ -7,7 +7,7 @@ import (
 
 	"github.com/DATA-DOG/go-sqlmock"
 	"github.com/google/uuid"
-	"github.com/happYness-Project/taskManagementGolang/internal/taskcontainer/model"
+	"github.com/happYness-Project/taskManagementGolang/internal/taskcontainer/domain"
 	"github.com/stretchr/testify/require"
 )
 
@@ -97,8 +97,8 @@ func TestContainerRepo_GetContainersByGroupId(t *testing.T) {
 	})
 }
 
-func mockContainerObj() model.TaskContainer {
-	return model.TaskContainer{
+func mockContainerObj() domain.TaskContainer {
+	return domain.TaskContainer{
 		Id:          uuid.New().String(),
 		Name:        "testuser",
 		Description: "testdesc",
@@ -106,7 +106,7 @@ func mockContainerObj() model.TaskContainer {
 		UsergroupId: 1,
 	}
 }
-func mockContainerRows(c model.TaskContainer) *sqlmock.Rows {
+func mockContainerRows(c domain.TaskContainer) *sqlmock.Rows {
 	return sqlmock.NewRows([]string{"id", "name", "description", "is_active", "usergroup_id"}).
 		AddRow(c.Id, c.Name, c.Description, c.IsActive, c.UsergroupId)
 }
