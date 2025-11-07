@@ -1,8 +1,8 @@
 package mocks
 
 import (
-	"github.com/happYness-Project/taskManagementGolang/internal/task/model"
-	userModel "github.com/happYness-Project/taskManagementGolang/internal/user/model"
+	taskModel "github.com/happYness-Project/taskManagementGolang/internal/task/model"
+	userModel "github.com/happYness-Project/taskManagementGolang/internal/user/domain"
 	"github.com/stretchr/testify/mock"
 )
 
@@ -70,12 +70,12 @@ func (m *MockUserRepo) UpdateUser(user userModel.User) error {
 
 type TaskRepo struct{ mock.Mock }
 
-func (m *TaskRepo) GetAllTasks() ([]model.Task, error) {
+func (m *TaskRepo) GetAllTasks() ([]taskModel.Task, error) {
 	args := m.Called()
-	return args.Get(0).([]model.Task), args.Error(1)
+	return args.Get(0).([]taskModel.Task), args.Error(1)
 }
 
-func (m *TaskRepo) GetTaskById(id string) (*model.Task, error) {
+func (m *TaskRepo) GetTaskById(id string) (*taskModel.Task, error) {
 	args := m.Called(id)
-	return args.Get(0).(*model.Task), args.Error(1)
+	return args.Get(0).(*taskModel.Task), args.Error(1)
 }

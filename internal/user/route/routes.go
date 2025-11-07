@@ -11,7 +11,7 @@ import (
 	"github.com/happYness-Project/taskManagementGolang/internal/user/application"
 	"github.com/happYness-Project/taskManagementGolang/internal/user/application/command"
 	"github.com/happYness-Project/taskManagementGolang/internal/user/application/query"
-	"github.com/happYness-Project/taskManagementGolang/internal/user/model"
+	"github.com/happYness-Project/taskManagementGolang/internal/user/domain"
 	"github.com/happYness-Project/taskManagementGolang/internal/user/repository"
 	userGroupRepo "github.com/happYness-Project/taskManagementGolang/internal/usergroup/repository"
 	"github.com/happYness-Project/taskManagementGolang/pkg/constants"
@@ -75,7 +75,7 @@ func (h *Handler) handleGetUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	user := result.(*model.User)
+	user := result.(*domain.User)
 
 	// Get user's groups (this will be moved to a read model later)
 	userDetailDto := new(UserDetailDto)
@@ -121,7 +121,7 @@ func (h *Handler) handleGetUsersByGroupId(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	usersWithRoles := result.([]*model.UserWithRole)
+	usersWithRoles := result.([]*domain.UserWithRole)
 
 	// Convert to DTOs
 	var userDtos []*UserWithRoleDto
@@ -162,7 +162,7 @@ func (h *Handler) responseUser(w http.ResponseWriter, findField string, findVar 
 		return
 	}
 
-	user := result.(*model.User)
+	user := result.(*domain.User)
 
 	userDetailDto := new(UserDetailDto)
 	ugs, err := h.userGroupRepo.GetUserGroupsByUserId(user.Id)

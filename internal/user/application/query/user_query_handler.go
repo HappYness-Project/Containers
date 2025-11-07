@@ -3,7 +3,7 @@ package query
 import (
 	"fmt"
 
-	"github.com/happYness-Project/taskManagementGolang/internal/user/model"
+	"github.com/happYness-Project/taskManagementGolang/internal/user/domain"
 	"github.com/happYness-Project/taskManagementGolang/internal/user/repository"
 )
 
@@ -40,7 +40,7 @@ func NewUserQueryHandler(
 }
 
 // HandleGetAllUsers retrieves all users
-func (h *UserQueryHandler) HandleGetAllUsers(query GetAllUsersQuery) ([]*model.User, error) {
+func (h *UserQueryHandler) HandleGetAllUsers(query GetAllUsersQuery) ([]*domain.User, error) {
 	users, err := h.userRepo.GetAllUsers()
 	if err != nil {
 		return nil, fmt.Errorf("failed to retrieve users: %w", err)
@@ -49,7 +49,7 @@ func (h *UserQueryHandler) HandleGetAllUsers(query GetAllUsersQuery) ([]*model.U
 }
 
 // HandleGetUserById retrieves a single user by ID
-func (h *UserQueryHandler) HandleGetUserById(query GetUserByIdQuery) (*model.User, error) {
+func (h *UserQueryHandler) HandleGetUserById(query GetUserByIdQuery) (*domain.User, error) {
 	user, err := h.userRepo.GetUserByUserId(query.UserId)
 	if err != nil {
 		return nil, fmt.Errorf("failed to retrieve user: %w", err)
@@ -63,7 +63,7 @@ func (h *UserQueryHandler) HandleGetUserById(query GetUserByIdQuery) (*model.Use
 }
 
 // HandleGetUserByEmail retrieves a user by email
-func (h *UserQueryHandler) HandleGetUserByEmail(query GetUserByEmailQuery) (*model.User, error) {
+func (h *UserQueryHandler) HandleGetUserByEmail(query GetUserByEmailQuery) (*domain.User, error) {
 	user, err := h.userRepo.GetUserByEmail(query.Email)
 	if err != nil {
 		return nil, fmt.Errorf("failed to retrieve user by email: %w", err)
@@ -77,7 +77,7 @@ func (h *UserQueryHandler) HandleGetUserByEmail(query GetUserByEmailQuery) (*mod
 }
 
 // HandleGetUserByUsername retrieves a user by username
-func (h *UserQueryHandler) HandleGetUserByUsername(query GetUserByUsernameQuery) (*model.User, error) {
+func (h *UserQueryHandler) HandleGetUserByUsername(query GetUserByUsernameQuery) (*domain.User, error) {
 	user, err := h.userRepo.GetUserByUsername(query.Username)
 	if err != nil {
 		return nil, fmt.Errorf("failed to retrieve user by username: %w", err)
@@ -91,7 +91,7 @@ func (h *UserQueryHandler) HandleGetUserByUsername(query GetUserByUsernameQuery)
 }
 
 // HandleGetUsersByGroupId retrieves all users in a group with roles
-func (h *UserQueryHandler) HandleGetUsersByGroupId(query GetUsersByGroupIdQuery) ([]*model.UserWithRole, error) {
+func (h *UserQueryHandler) HandleGetUsersByGroupId(query GetUsersByGroupIdQuery) ([]*domain.UserWithRole, error) {
 	users, err := h.userRepo.GetUsersByGroupIdWithRoles(query.GroupId)
 	if err != nil {
 		return nil, fmt.Errorf("failed to retrieve users by group: %w", err)

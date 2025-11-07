@@ -4,19 +4,19 @@ import (
 	"database/sql"
 	"fmt"
 
-	"github.com/happYness-Project/taskManagementGolang/internal/user/model"
+	"github.com/happYness-Project/taskManagementGolang/internal/user/domain"
 )
 
 type UserRepository interface {
-	GetAllUsers() ([]*model.User, error)
-	GetUserByUserId(userId string) (*model.User, error)
-	GetUserByEmail(email string) (*model.User, error)
-	GetUserByUsername(username string) (*model.User, error)
-	GetUsersByGroupId(groupId int) ([]*model.User, error)
-	GetUsersByGroupIdWithRoles(groupId int) ([]*model.UserWithRole, error)
+	GetAllUsers() ([]*domain.User, error)
+	GetUserByUserId(userId string) (*domain.User, error)
+	GetUserByEmail(email string) (*domain.User, error)
+	GetUserByUsername(username string) (*domain.User, error)
+	GetUsersByGroupId(groupId int) ([]*domain.User, error)
+	GetUsersByGroupIdWithRoles(groupId int) ([]*domain.UserWithRole, error)
 	GetUserRoleInGroup(userId string, groupId int) (string, error)
-	CreateUser(user model.User) error
-	UpdateUser(user model.User) error
+	CreateUser(user domain.User) error
+	UpdateUser(user domain.User) error
 }
 type UserRepo struct {
 	DB *sql.DB
@@ -26,13 +26,13 @@ func NewUserRepository(db *sql.DB) *UserRepo {
 	return &UserRepo{DB: db}
 }
 
-func (s *UserRepo) GetAllUsers() ([]*model.User, error) {
+func (s *UserRepo) GetAllUsers() ([]*domain.User, error) {
 	rows, err := s.DB.Query(sqlGetAllUsers)
 	if err != nil {
 		return nil, err
 	}
 
-	users := make([]*model.User, 0)
+	users := make([]*domain.User, 0)
 	for rows.Next() {
 		p, err := scanRowsIntoUser(rows)
 		if err != nil {
@@ -45,7 +45,7 @@ func (s *UserRepo) GetAllUsers() ([]*model.User, error) {
 	return users, nil
 }
 
-func (m *UserRepo) GetUserByUserId(user_id string) (*model.User, error) {
+func (m *UserRepo) GetUserByUserId(user_id string) (*domain.User, error) {
 	rows, err := m.DB.Query(sqlGetUserByUserId, user_id)
 	if err != nil {
 		return nil, err
@@ -63,13 +63,13 @@ func (m *UserRepo) GetUserByUserId(user_id string) (*model.User, error) {
 	return user, err
 }
 
-func (m *UserRepo) GetUserByEmail(email string) (*model.User, error) {
+func (m *UserRepo) GetUserByEmail(email string) (*domain.User, error) {
 	rows, err := m.DB.Query(sqlGetUserByEmail, email)
 	if err != nil {
 		return nil, err
 	}
 
-	user := new(model.User)
+	user := new(domain.User)
 	for rows.Next() {
 		user, err = scanRowsIntoUser(rows)
 		if err != nil {
@@ -78,13 +78,13 @@ func (m *UserRepo) GetUserByEmail(email string) (*model.User, error) {
 	}
 	return user, err
 }
-func (m *UserRepo) GetUserByUsername(username string) (*model.User, error) {
+func (m *UserRepo) GetUserByUsername(username string) (*domain.User, error) {
 	rows, err := m.DB.Query(sqlGetUserByUsername, username)
 	if err != nil {
 		return nil, err
 	}
 
-	user := new(model.User)
+	user := new(domain.User)
 	for rows.Next() {
 		user, err = scanRowsIntoUser(rows)
 		if err != nil {
@@ -94,14 +94,14 @@ func (m *UserRepo) GetUserByUsername(username string) (*model.User, error) {
 	return user, err
 }
 
-func (m *UserRepo) GetUsersByGroupId(groupId int) ([]*model.User, error) {
+func (m *UserRepo) GetUsersByGroupId(groupId int) ([]*domain.User, error) {
 	rows, err := m.DB.Query(sqlGetUsersByGroupId, groupId)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
 
-	var users []*model.User
+	var users []*domain.User
 	for rows.Next() {
 		user, err := scanRowsIntoUser(rows)
 		if err != nil {
@@ -111,7 +111,7 @@ func (m *UserRepo) GetUsersByGroupId(groupId int) ([]*model.User, error) {
 	}
 	return users, nil
 }
-func (m *UserRepo) CreateUser(user model.User) error {
+func (m *UserRepo) CreateUser(user domain.User) error {
 
 	tx, err := m.DB.Begin()
 	if err != nil {
@@ -129,7 +129,7 @@ func (m *UserRepo) CreateUser(user model.User) error {
 
 	return nil
 }
-func (m *UserRepo) UpdateUser(user model.User) error {
+func (m *UserRepo) UpdateUser(user domain.User) error {
 	_, err := m.DB.Exec(sqlUpdateUser, user.Id, user.FirstName, user.LastName, user.Email, user.DefaultGroupId, user.UpdatedAt)
 	if err != nil {
 		return err
@@ -137,14 +137,14 @@ func (m *UserRepo) UpdateUser(user model.User) error {
 	return nil
 }
 
-func (m *UserRepo) GetUsersByGroupIdWithRoles(groupId int) ([]*model.UserWithRole, error) {
+func (m *UserRepo) GetUsersByGroupIdWithRoles(groupId int) ([]*domain.UserWithRole, error) {
 	rows, err := m.DB.Query(sqlGetUsersByGroupIdWithRoles, groupId)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
 
-	var users []*model.UserWithRole
+	var users []*domain.UserWithRole
 	for rows.Next() {
 		user, err := scanRowsIntoUserWithRole(rows)
 		if err != nil {
@@ -164,8 +164,8 @@ func (m *UserRepo) GetUserRoleInGroup(userId string, groupId int) (string, error
 	return role, nil
 }
 
-func scanRowsIntoUser(rows *sql.Rows) (*model.User, error) {
-	user := new(model.User)
+func scanRowsIntoUser(rows *sql.Rows) (*domain.User, error) {
+	user := new(domain.User)
 
 	err := rows.Scan(
 		&user.Id,
@@ -186,8 +186,8 @@ func scanRowsIntoUser(rows *sql.Rows) (*model.User, error) {
 	return user, nil
 }
 
-func scanRowsIntoUserWithRole(rows *sql.Rows) (*model.UserWithRole, error) {
-	user := new(model.User)
+func scanRowsIntoUserWithRole(rows *sql.Rows) (*domain.UserWithRole, error) {
+	user := new(domain.User)
 	var role string
 	var joined_at sql.NullTime
 
@@ -209,7 +209,7 @@ func scanRowsIntoUserWithRole(rows *sql.Rows) (*model.UserWithRole, error) {
 		return nil, err
 	}
 
-	return &model.UserWithRole{
+	return &domain.UserWithRole{
 		User:     user,
 		Role:     role,
 		JoinedAt: joined_at.Time,

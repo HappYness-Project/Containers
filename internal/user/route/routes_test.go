@@ -11,7 +11,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/happYness-Project/taskManagementGolang/internal/mocks"
-	userModel "github.com/happYness-Project/taskManagementGolang/internal/user/model"
+	userModel "github.com/happYness-Project/taskManagementGolang/internal/user/domain"
 	userGroupModel "github.com/happYness-Project/taskManagementGolang/internal/usergroup/domain"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"

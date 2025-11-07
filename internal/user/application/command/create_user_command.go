@@ -3,7 +3,7 @@ package command
 import (
 	"fmt"
 
-	"github.com/happYness-Project/taskManagementGolang/internal/user/model"
+	"github.com/happYness-Project/taskManagementGolang/internal/user/domain"
 	"github.com/happYness-Project/taskManagementGolang/internal/user/repository"
 )
 
@@ -32,7 +32,7 @@ func NewCreateUserCommandHandler(
 // Handle executes the create user command
 func (h *CreateUserCommandHandler) Handle(cmd CreateUserCommand) error {
 	// Create the domain model (includes validation)
-	user := model.NewUser(cmd.UserId, cmd.UserName, cmd.FirstName, cmd.LastName, cmd.Email)
+	user := domain.NewUser(cmd.UserId, cmd.UserName, cmd.FirstName, cmd.LastName, cmd.Email)
 
 	// Persist the user
 	err := h.userRepo.CreateUser(*user)
