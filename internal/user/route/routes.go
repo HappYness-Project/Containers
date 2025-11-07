@@ -8,24 +8,31 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/jwtauth"
+	"github.com/happYness-Project/taskManagementGolang/internal/user/application"
+	"github.com/happYness-Project/taskManagementGolang/internal/user/application/command"
+	"github.com/happYness-Project/taskManagementGolang/internal/user/application/query"
 	"github.com/happYness-Project/taskManagementGolang/internal/user/model"
 	"github.com/happYness-Project/taskManagementGolang/internal/user/repository"
-	userRepo "github.com/happYness-Project/taskManagementGolang/internal/user/repository"
 	userGroupRepo "github.com/happYness-Project/taskManagementGolang/internal/usergroup/repository"
 	"github.com/happYness-Project/taskManagementGolang/pkg/constants"
-	"github.com/happYness-Project/taskManagementGolang/pkg/errors"
 	"github.com/happYness-Project/taskManagementGolang/pkg/loggers"
 	"github.com/happYness-Project/taskManagementGolang/pkg/response"
 )
 
 type Handler struct {
 	logger        *loggers.AppLogger
-	userRepo      userRepo.UserRepository
-	userGroupRepo userGroupRepo.UserGroupRepository
+	commandBus    *application.CommandBus
+	queryBus      *application.QueryBus
+	userGroupRepo userGroupRepo.UserGroupRepository // Keep for now (used in user detail)
 }
 
 func NewHandler(logger *loggers.AppLogger, repo repository.UserRepository, ugRepo userGroupRepo.UserGroupRepository) *Handler {
-	return &Handler{logger: logger, userRepo: repo, userGroupRepo: ugRepo}
+	return &Handler{
+		logger:        logger,
+		commandBus:    application.NewCommandBus(repo),
+		queryBus:      application.NewQueryBus(repo),
+		userGroupRepo: ugRepo,
+	}
 }
 
 func (h *Handler) RegisterRoutes(router chi.Router) {
@@ -41,35 +48,36 @@ func (h *Handler) RegisterRoutes(router chi.Router) {
 }
 
 func (h *Handler) handleGetUsers(w http.ResponseWriter, r *http.Request) {
-
-	if r.URL.Query().Get("email") != "" {
-		h.responseUser(w, "email", r.URL.Query().Get("email"))
+	// Handle query parameters for email/username search
+	if email := r.URL.Query().Get("email"); email != "" {
+		h.responseUser(w, "email", email)
 		return
-	} else if r.URL.Query().Get("username") != "" {
-		h.responseUser(w, "username", r.URL.Query().Get("username"))
+	} else if username := r.URL.Query().Get("username"); username != "" {
+		h.responseUser(w, "username", username)
 		return
 	}
-	users, err := h.userRepo.GetAllUsers()
+
+	// Use Query Bus
+	result, err := h.queryBus.Execute(query.GetAllUsersQuery{})
 	if err != nil {
 		h.logger.Error().Err(err).Str("ErrorCode", constants.ServerError).Msg("Error occurred during GetAllUsers.")
 		response.InternalServerError(w)
 		return
 	}
-	response.SuccessJson(w, users, "success", http.StatusOK)
+	response.SuccessJson(w, result, "success", http.StatusOK)
 }
 func (h *Handler) handleGetUser(w http.ResponseWriter, r *http.Request) {
-	user, err := h.userRepo.GetUserByUserId(chi.URLParam(r, "userID"))
+	// Use Query Bus
+	result, err := h.queryBus.Execute(query.GetUserByIdQuery{UserId: chi.URLParam(r, "userID")})
 	if err != nil {
 		h.logger.Error().Err(err).Str("ErrorCode", constants.ServerError).Msg("Error occurred during GetUserByUserId")
 		response.InternalServerError(w, "Error occurred during retrieving user.")
 		return
 	}
-	if user == nil {
-		h.logger.Error().Str("ErrorCode", UserGetNotFound)
-		response.NotFound(w, UserGetNotFound, "user does not exist")
-		return
-	}
 
+	user := result.(*model.User)
+
+	// Get user's groups (this will be moved to a read model later)
 	userDetailDto := new(UserDetailDto)
 	ugs, err := h.userGroupRepo.GetUserGroupsByUserId(user.Id)
 	if err != nil {
@@ -105,12 +113,15 @@ func (h *Handler) handleGetUsersByGroupId(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	usersWithRoles, err := h.userRepo.GetUsersByGroupIdWithRoles(groupId)
+	// Use Query Bus
+	result, err := h.queryBus.Execute(query.GetUsersByGroupIdQuery{GroupId: groupId})
 	if err != nil {
 		h.logger.Error().Err(err).Msg("Error during Get Users by Group ID with Roles")
 		response.InternalServerError(w, "Error occurred during retrieving users by group ID")
 		return
 	}
+
+	usersWithRoles := result.([]*model.UserWithRole)
 
 	// Convert to DTOs
 	var userDtos []*UserWithRoleDto
@@ -135,26 +146,26 @@ func (h *Handler) handleGetUsersByGroupId(w http.ResponseWriter, r *http.Request
 	response.SuccessJson(w, userDtos, "success", http.StatusOK)
 }
 func (h *Handler) responseUser(w http.ResponseWriter, findField string, findVar string) {
-	var user *model.User
+	var result interface{}
 	var err error
+
+	// Use Query Bus
 	if findField == "email" {
-		user, err = h.userRepo.GetUserByEmail(findVar)
+		result, err = h.queryBus.Execute(query.GetUserByEmailQuery{Email: findVar})
 	} else if findField == "username" {
-		user, err = h.userRepo.GetUserByUsername(findVar)
+		result, err = h.queryBus.Execute(query.GetUserByUsernameQuery{Username: findVar})
 	}
+
 	if err != nil {
 		h.logger.Error().Err(err).Str("ErrorCode", constants.ServerError).Msg("Error occurred during responseUser.")
 		response.InternalServerError(w)
 		return
 	}
-	if user.Id == 0 {
-		h.logger.Error().Err(err).Str("ErrorCode", UserGetNotFound)
-		response.NotFound(w, UserGetNotFound, "cannot find an user")
-		return
-	}
+
+	user := result.(*model.User)
 
 	userDetailDto := new(UserDetailDto)
-	ugs, err := h.userGroupRepo.GetUserGroupsByUserId(user.Id) // TODO Let's double check this - what if there are server errors.
+	ugs, err := h.userGroupRepo.GetUserGroupsByUserId(user.Id)
 	if err != nil {
 		h.logger.Error().Err(err).Str("ErrorCode", GetUserGroupsNotFound).Msg("Error occurred during GetUserGroupsByUserId")
 		response.NotFound(w, GetUserGroupsNotFound, err.Error())
@@ -185,14 +196,19 @@ func (h *Handler) handleCreateUser(w http.ResponseWriter, r *http.Request) {
 	_, claims, _ := jwtauth.FromContext(r.Context())
 	userId := fmt.Sprintf("%v", claims["nameid"])
 
-	user := model.NewUser(userId, createDto.UserName, createDto.FirstName, createDto.LastName, createDto.Email)
+	// Use Command Bus
+	cmd := command.CreateUserCommand{
+		UserId:    userId,
+		UserName:  createDto.UserName,
+		FirstName: createDto.FirstName,
+		LastName:  createDto.LastName,
+		Email:     createDto.Email,
+	}
 
-	err := h.userRepo.CreateUser(*user)
+	_, err := h.commandBus.Execute(cmd)
 	if err != nil {
 		h.logger.Error().Err(err).Str("ErrorCode", UserCreateServerError).Msg(err.Error())
 		response.ErrorResponse(w, http.StatusBadRequest, *response.New(UserCreateServerError, "Bad Request", "cannot create a user"))
-		// different error message is required for this
-		// if user already exists, conflict error should return
 		return
 	}
 	response.SuccessJson(w, map[string]string{"user_id": userId}, "User is created.", http.StatusCreated)
@@ -205,16 +221,15 @@ func (h *Handler) handleUpdateUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	user, err := h.userRepo.GetUserByUserId(chi.URLParam(r, "userID"))
-	if err != nil || user == nil {
-		h.logger.Error().Err(err).Str("ErrorCode", UserGetNotFound).Msg("Error occurred during GetUserByUserId")
-		response.NotFound(w, UserGetNotFound, "cannot find a user")
-		return
+	// Use Command Bus
+	cmd := command.UpdateUserCommand{
+		UserId:    chi.URLParam(r, "userID"),
+		FirstName: updateDto.FirstName,
+		LastName:  updateDto.LastName,
+		Email:     updateDto.Email,
 	}
 
-	user.UpdateUser(updateDto.FirstName, updateDto.LastName, updateDto.Email) // Todo : Domain Validation error code.
-
-	err = h.userRepo.UpdateUser(*user)
+	_, err := h.commandBus.Execute(cmd)
 	if err != nil {
 		h.logger.Error().Err(err).Str("ErrorCode", UserUpdateServerError).Msg("Error occurred during UpdateUser")
 		response.ErrorResponse(w, http.StatusBadRequest, *(response.New(UserUpdateServerError, "Bad Request", "Error occurred during Update user.")))
@@ -235,24 +250,16 @@ func (h *Handler) handleUpdateGroupId(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	user, err := h.userRepo.GetUserByUserId(chi.URLParam(r, "userID"))
-	if err != nil || user == nil {
-		h.logger.Error().Err(err).Str("ErrorCode", UserGetNotFound) // what if there was an server error.
-		response.NotFound(w, UserGetNotFound, "Not able to find a user")
-		return
+	// Use Command Bus
+	cmd := command.UpdateDefaultGroupCommand{
+		UserId:         chi.URLParam(r, "userID"),
+		DefaultGroupId: jsonBody.DefaultGroupId,
 	}
 
-	err = user.UpdateDefaultGroupId(jsonBody.DefaultGroupId)
+	_, err = h.commandBus.Execute(cmd)
 	if err != nil {
 		h.logger.Error().Err(err).Str("ErrorCode", UserDomainError).Msg(err.Error())
 		response.BadRequestDomainError(w, UserDomainError, err.Error())
-		return
-	}
-
-	err = h.userRepo.UpdateUser(*user)
-	if err != nil {
-		h.logger.Error().Err(err).Str("ErrorCode", UserUpdateServerError).Msg(err.Error())
-		response.ErrorResponse(w, http.StatusBadRequest, *(response.New(UserUpdateServerError, errors.Badrequest, "Error ocurred during update an user")))
 		return
 	}
 

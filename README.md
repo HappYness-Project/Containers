@@ -1,32 +1,44 @@
-# TaskManagementAPI
-Task Management API is used for handling tasks and containers for the specific user groups.
-This project is designed to be run using Docker and Docker Compose. Follow the instructions below to get started.
+# Containers API
+
+A RESTful API for managing tasks and containers within user groups. Built with Go using clean architecture principles and CQRS pattern.
+
+## Tech Stack
+
+- **Go** 1.24.5
+- **Framework:** Chi router
+- **Database:** PostgreSQL (pgx/v5)
+- **Authentication:** JWT
+- **Logging:** Zerolog
+- **Containerization:** Docker
+
+## Features
+
+- Task and container management
+- User group organization with role-based permissions
+- Command/Query separation (CQRS)
+- Clean architecture with domain-driven design
+- JWT authentication
+- Comprehensive logging with request IDs
 
 ## Prerequisites
 
-Make sure you have the following installed on your system:
-
 - [Docker](https://docs.docker.com/get-docker/)
 - [Docker Compose](https://docs.docker.com/compose/install/)
-- Makefile setup
+- Make
 
-## Getting Started
+## Quick Start
 
-
-### Run Docker Container
-Inside the root of the project, You should run
+Start the application:
 ```sh
 make start
 ```
-Above comment will create the postgres database within the docker and create the tables and sample data.
 
-If you want to stop/remove the containers,
+Stop/remove containers:
 ```sh
 make down
 ```
 
-Rebuild command
+Rebuild:
 ```sh
 make rebuild-docker
 ```
-
