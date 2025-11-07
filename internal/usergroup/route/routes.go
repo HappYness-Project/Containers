@@ -10,6 +10,8 @@ import (
 	"github.com/go-chi/jwtauth"
 	userRepo "github.com/happYness-Project/taskManagementGolang/internal/user/repository"
 	"github.com/happYness-Project/taskManagementGolang/internal/usergroup/application"
+	"github.com/happYness-Project/taskManagementGolang/internal/usergroup/application/command"
+	"github.com/happYness-Project/taskManagementGolang/internal/usergroup/application/query"
 
 	"github.com/happYness-Project/taskManagementGolang/internal/usergroup/repository"
 	"github.com/happYness-Project/taskManagementGolang/pkg/constants"
@@ -18,18 +20,16 @@ import (
 )
 
 type Handler struct {
-	logger         *loggers.AppLogger
-	commandHandler *application.UserGroupCommandHandler
-	queryHandler   *application.UserGroupQueryHandler
+	logger     *loggers.AppLogger
+	commandBus *application.CommandBus
+	queryBus   *application.QueryBus
 }
 
 func NewHandler(logger *loggers.AppLogger, repo repository.UserGroupRepository, userRepo userRepo.UserRepository) *Handler {
-	commandHandler := application.NewUserGroupCommandHandler(repo, userRepo)
-	queryHandler := application.NewUserGroupQueryHandler(repo, userRepo)
 	return &Handler{
-		logger:         logger,
-		commandHandler: commandHandler,
-		queryHandler:   queryHandler,
+		logger:     logger,
+		commandBus: application.NewCommandBus(repo, userRepo),
+		queryBus:   application.NewQueryBus(repo, userRepo),
 	}
 }
 func (h *Handler) RegisterRoutes(router chi.Router) {
@@ -46,14 +46,14 @@ func (h *Handler) RegisterRoutes(router chi.Router) {
 }
 
 func (h *Handler) handleGetUserGroups(w http.ResponseWriter, r *http.Request) {
-	// Use Query Handler
-	groups, err := h.queryHandler.HandleGetAllGroups(application.GetAllGroupsQuery{})
+	// Use Query Bus
+	result, err := h.queryBus.Execute(query.GetAllGroupsQuery{})
 	if err != nil {
 		h.logger.Error().Err(err).Str("ErrorCode", constants.ServerError).Msg("Error occurred during getting groups.")
 		response.InternalServerError(w)
 		return
 	}
-	response.WriteJsonWithEncode(w, http.StatusOK, groups)
+	response.WriteJsonWithEncode(w, http.StatusOK, result)
 }
 func (h *Handler) handleGetUserGroupById(w http.ResponseWriter, r *http.Request) {
 	groupId, err := strconv.Atoi(chi.URLParam(r, "groupID"))
@@ -63,15 +63,15 @@ func (h *Handler) handleGetUserGroupById(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	// Use Query Handler
-	group, err := h.queryHandler.HandleGetGroupById(application.GetGroupByIdQuery{GroupId: groupId})
+	// Use Query Bus
+	result, err := h.queryBus.Execute(query.GetGroupByIdQuery{GroupId: groupId})
 	if err != nil {
 		h.logger.Error().Err(err).Str("ErrorCode", UserGroupGetNotFound).Msg(err.Error())
 		response.NotFound(w, UserGroupGetNotFound, "group does not exist")
 		return
 	}
 
-	response.WriteJsonWithEncode(w, http.StatusOK, group)
+	response.WriteJsonWithEncode(w, http.StatusOK, result)
 }
 
 func (h *Handler) handleCreateUserGroup(w http.ResponseWriter, r *http.Request) {
@@ -86,21 +86,21 @@ func (h *Handler) handleCreateUserGroup(w http.ResponseWriter, r *http.Request) 
 	_, claims, _ := jwtauth.FromContext(r.Context())
 	userid := fmt.Sprintf("%v", claims["nameid"])
 
-	// Use Command Handler
-	cmd := application.CreateGroupCommand{
+	// Use Command Bus
+	cmd := command.CreateGroupCommand{
 		GroupName: createDto.GroupName,
 		GroupDesc: createDto.GroupDesc,
 		GroupType: createDto.GroupType,
 		CreatorId: userid,
 	}
-
-	groupId, err := h.commandHandler.HandleCreateGroup(cmd)
+	result, err := h.commandBus.Execute(cmd)
 	if err != nil {
 		h.logger.Error().Err(err).Str("ErrorCode", UserGroupCreationFailure).Msg(err.Error())
 		response.ErrorResponse(w, http.StatusBadRequest, *response.New(UserGroupCreationFailure, "Failed to create group", err.Error()))
 		return
 	}
 
+	groupId := result.(int)
 	response.SuccessJson(w, map[string]int{"group_id": groupId}, "User group is created.", http.StatusCreated)
 }
 
@@ -112,15 +112,15 @@ func (h *Handler) handleGetUserGroupByUserId(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	// Use Query Handler
-	groups, err := h.queryHandler.HandleGetGroupsByUserId(application.GetGroupsByUserIdQuery{UserId: userId})
+	// Use Query Bus
+	result, err := h.queryBus.Execute(query.GetGroupsByUserIdQuery{UserId: userId})
 	if err != nil {
 		h.logger.Error().Err(err).Str("ErrorCode", UserGroupGetNotFound).Msg(err.Error())
 		response.NotFound(w, UserGroupGetNotFound, "Not able to find user groups")
 		return
 	}
 
-	response.WriteJsonWithEncode(w, http.StatusOK, groups)
+	response.WriteJsonWithEncode(w, http.StatusOK, result)
 }
 
 func (h *Handler) handleAddUserToGroup(w http.ResponseWriter, r *http.Request) {
@@ -142,13 +142,13 @@ func (h *Handler) handleAddUserToGroup(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Use Command Handler
-	cmd := application.AddMemberCommand{
+	// Use Command Bus
+	cmd := command.AddMemberCommand{
 		GroupId: groupId,
 		UserId:  jsonBody.UserId,
 	}
 
-	err = h.commandHandler.HandleAddMember(cmd)
+	_, err = h.commandBus.Execute(cmd)
 	if err != nil {
 		h.logger.Error().Err(err).Str("ErrorCode", UserGroupAddUserError).Msg(err.Error())
 		response.ErrorResponse(w, http.StatusBadRequest, *response.New(UserGroupAddUserError, "Bad Request", err.Error()))
@@ -166,9 +166,9 @@ func (h *Handler) handleDeleteUserGroup(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	// Use Command Handler
-	cmd := application.DeleteGroupCommand{GroupId: groupId}
-	err = h.commandHandler.HandleDeleteGroup(cmd)
+	// Use Command Bus
+	cmd := command.DeleteGroupCommand{GroupId: groupId}
+	_, err = h.commandBus.Execute(cmd)
 	if err != nil {
 		h.logger.Error().Err(err).Str("ErrorCode", DeleteUserGroupError).Msg(err.Error())
 		response.ErrorResponse(w, http.StatusBadRequest, *response.New(DeleteUserGroupError, "Bad Request", err.Error()))
@@ -194,13 +194,13 @@ func (h *Handler) handleRemoveUserFromGroup(w http.ResponseWriter, r *http.Reque
 
 	userId := chi.URLParam(r, "userID")
 
-	// Use Command Handler (it handles the default group clearing logic)
-	cmd := application.RemoveMemberCommand{
+	// Use Command Bus (it handles the default group clearing logic)
+	cmd := command.RemoveMemberCommand{
 		GroupId: groupId,
 		UserId:  userId,
 	}
 
-	err = h.commandHandler.HandleRemoveMember(cmd)
+	_, err = h.commandBus.Execute(cmd)
 	if err != nil {
 		h.logger.Error().Err(err).Str("ErrorCode", RemoveUserFromUserGroupError).Msg(err.Error())
 		response.ErrorResponse(w, http.StatusBadRequest, *response.New(RemoveUserFromUserGroupError, "Bad Request", err.Error()))
@@ -227,14 +227,14 @@ func (h *Handler) handleUpdateUserRoleInGroup(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	// Use Command Handler (it validates the role using the Role value object)
-	cmd := application.ChangeMemberRoleCommand{
+	// Use Command Bus (it validates the role using the Role value object)
+	cmd := command.ChangeMemberRoleCommand{
 		GroupId: groupId,
 		UserId:  userId,
 		NewRole: updateDto.Role,
 	}
 
-	err = h.commandHandler.HandleChangeMemberRole(cmd)
+	_, err = h.commandBus.Execute(cmd)
 	if err != nil {
 		h.logger.Error().Err(err).Str("ErrorCode", UpdateUserRoleError).Msg(err.Error())
 		response.ErrorResponse(w, http.StatusBadRequest, *response.New(UpdateUserRoleError, "Bad Request", err.Error()))
