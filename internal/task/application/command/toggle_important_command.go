@@ -20,13 +20,16 @@ func NewToggleImportantCommandHandler(taskRepo repository.TaskRepository) *Toggl
 }
 
 func (h *ToggleImportantCommandHandler) Handle(cmd ToggleImportantCommand) error {
-	// Verify task exists
+	// Get existing task
 	task, err := h.taskRepo.GetTaskById(cmd.TaskId)
 	if err != nil || task == nil {
 		return fmt.Errorf("task not found: %w", err)
 	}
 
-	// Toggle important status
+	// Toggle important using domain method
+	task.ToggleImportant(cmd.IsImportant)
+
+	// Persist changes
 	err = h.taskRepo.UpdateImportantTask(cmd.TaskId, cmd.IsImportant)
 	if err != nil {
 		return fmt.Errorf("failed to toggle important: %w", err)

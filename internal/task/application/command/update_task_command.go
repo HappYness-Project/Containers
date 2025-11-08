@@ -31,18 +31,16 @@ func (h *UpdateTaskCommandHandler) Handle(cmd UpdateTaskCommand) error {
 		return fmt.Errorf("task not found: %w", err)
 	}
 
-	// Update fields
-	task.TaskName = cmd.TaskName
-	task.TaskDesc = cmd.TaskDesc
-	task.TargetDate = cmd.TargetDate
-	task.Priority = cmd.Priority
-	task.Category = cmd.Category
-	task.UpdatedAt = time.Now().UTC()
+	// Update task using domain method (enforces validation)
+	err = task.UpdateTask(cmd.TaskName, cmd.TaskDesc, cmd.TargetDate, cmd.Priority, cmd.Category)
+	if err != nil {
+		return fmt.Errorf("failed to update task: %w", err)
+	}
 
 	// Persist changes
 	err = h.taskRepo.UpdateTask(*task)
 	if err != nil {
-		return fmt.Errorf("failed to update task: %w", err)
+		return fmt.Errorf("failed to persist task update: %w", err)
 	}
 
 	return nil

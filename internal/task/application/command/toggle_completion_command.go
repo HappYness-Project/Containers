@@ -20,13 +20,16 @@ func NewToggleCompletionCommandHandler(taskRepo repository.TaskRepository) *Togg
 }
 
 func (h *ToggleCompletionCommandHandler) Handle(cmd ToggleCompletionCommand) error {
-	// Verify task exists
+	// Get existing task
 	task, err := h.taskRepo.GetTaskById(cmd.TaskId)
 	if err != nil || task == nil {
 		return fmt.Errorf("task not found: %w", err)
 	}
 
-	// Toggle completion status
+	// Toggle completion using domain method
+	task.ToggleCompletion(cmd.IsCompleted)
+
+	// Persist changes
 	err = h.taskRepo.DoneTask(cmd.TaskId, cmd.IsCompleted)
 	if err != nil {
 		return fmt.Errorf("failed to toggle completion: %w", err)

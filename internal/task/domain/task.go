@@ -64,3 +64,52 @@ func CreateTask(name, description string, targetDate time.Time, priority, catego
 
 	return task, nil
 }
+
+// UpdateTask updates task details with domain validation
+func (t *Task) UpdateTask(name, description string, targetDate time.Time, priority, category string) error {
+	// Validate name
+	if strings.TrimSpace(name) == "" {
+		return errors.New("task name cannot be empty")
+	}
+
+	if len(name) > 255 {
+		return errors.New("task name cannot exceed 255 characters")
+	}
+
+	// Validate and normalize priority
+	validPriorities := map[string]bool{
+		"low":    true,
+		"medium": true,
+		"high":   true,
+		"urgent": true,
+	}
+
+	normalizedPriority := priority
+	if priority == "" || !validPriorities[strings.ToLower(priority)] {
+		normalizedPriority = "medium" // Default to medium if empty or invalid
+	} else {
+		normalizedPriority = strings.ToLower(priority)
+	}
+
+	// Update fields
+	t.TaskName = strings.TrimSpace(name)
+	t.TaskDesc = strings.TrimSpace(description)
+	t.TargetDate = targetDate
+	t.Priority = normalizedPriority
+	t.Category = category
+	t.UpdatedAt = time.Now().UTC()
+
+	return nil
+}
+
+// ToggleCompletion toggles the completion status
+func (t *Task) ToggleCompletion(isCompleted bool) {
+	t.IsCompleted = isCompleted
+	t.UpdatedAt = time.Now().UTC()
+}
+
+// ToggleImportant toggles the important status
+func (t *Task) ToggleImportant(isImportant bool) {
+	t.IsImportant = isImportant
+	t.UpdatedAt = time.Now().UTC()
+}
