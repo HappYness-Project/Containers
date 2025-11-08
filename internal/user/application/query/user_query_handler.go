@@ -56,7 +56,7 @@ func (h *UserQueryHandler) HandleGetUserById(query GetUserByIdQuery) (*domain.Us
 	}
 
 	if user == nil {
-		return nil, fmt.Errorf("user not found: %s", query.UserId)
+		return nil, domain.ErrUserNotFound
 	}
 
 	return user, nil

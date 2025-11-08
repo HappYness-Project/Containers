@@ -3,6 +3,7 @@ package command
 import (
 	"fmt"
 
+	"github.com/happYness-Project/taskManagementGolang/internal/user/domain"
 	"github.com/happYness-Project/taskManagementGolang/internal/user/repository"
 )
 
@@ -29,14 +30,17 @@ func NewUpdateDefaultGroupCommandHandler(
 func (h *UpdateDefaultGroupCommandHandler) Handle(cmd UpdateDefaultGroupCommand) error {
 	// Validate user exists
 	user, err := h.userRepo.GetUserByUserId(cmd.UserId)
-	if err != nil || user == nil {
-		return fmt.Errorf("user not found: %s", cmd.UserId)
+	if err != nil {
+		return fmt.Errorf("failed to get user: %w", err)
+	}
+	if user == nil {
+		return domain.ErrUserNotFound
 	}
 
 	// Update default group using domain logic (includes validation)
 	err = user.UpdateDefaultGroupId(cmd.DefaultGroupId)
 	if err != nil {
-		return fmt.Errorf("domain validation error: %w", err)
+		return err // Return domain validation error as-is
 	}
 
 	// Persist changes

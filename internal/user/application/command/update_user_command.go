@@ -3,6 +3,7 @@ package command
 import (
 	"fmt"
 
+	"github.com/happYness-Project/taskManagementGolang/internal/user/domain"
 	"github.com/happYness-Project/taskManagementGolang/internal/user/repository"
 )
 
@@ -31,8 +32,11 @@ func NewUpdateUserCommandHandler(
 func (h *UpdateUserCommandHandler) Handle(cmd UpdateUserCommand) error {
 	// Validate user exists
 	user, err := h.userRepo.GetUserByUserId(cmd.UserId)
-	if err != nil || user == nil {
-		return fmt.Errorf("user not found: %s", cmd.UserId)
+	if err != nil {
+		return fmt.Errorf("failed to get user: %w", err)
+	}
+	if user == nil {
+		return domain.ErrUserNotFound
 	}
 
 	// Update user using domain logic

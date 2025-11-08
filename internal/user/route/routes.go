@@ -70,6 +70,12 @@ func (h *Handler) handleGetUser(w http.ResponseWriter, r *http.Request) {
 	// Use Query Bus
 	result, err := h.queryBus.Execute(query.GetUserByIdQuery{UserId: chi.URLParam(r, "userID")})
 	if err != nil {
+		// Check if it's a not-found error
+		if domain.IsNotFoundError(err) {
+			h.logger.Error().Err(err).Str("ErrorCode", UserGetNotFound).Msg("User not found")
+			response.ErrorResponse(w, http.StatusNotFound, *(response.New(UserGetNotFound, "Not found", "user does not exist")))
+			return
+		}
 		h.logger.Error().Err(err).Str("ErrorCode", constants.ServerError).Msg("Error occurred during GetUserByUserId")
 		response.InternalServerError(w, "Error occurred during retrieving user.")
 		return
@@ -231,6 +237,12 @@ func (h *Handler) handleUpdateUser(w http.ResponseWriter, r *http.Request) {
 
 	_, err := h.commandBus.Execute(cmd)
 	if err != nil {
+		// Check if it's a not-found error
+		if domain.IsNotFoundError(err) {
+			h.logger.Error().Err(err).Str("ErrorCode", UserGetNotFound).Msg("User not found")
+			response.ErrorResponse(w, http.StatusNotFound, *(response.New(UserGetNotFound, "Not found", "cannot find a user")))
+			return
+		}
 		h.logger.Error().Err(err).Str("ErrorCode", UserUpdateServerError).Msg("Error occurred during UpdateUser")
 		response.ErrorResponse(w, http.StatusBadRequest, *(response.New(UserUpdateServerError, "Bad Request", "Error occurred during Update user.")))
 		return
@@ -258,6 +270,13 @@ func (h *Handler) handleUpdateGroupId(w http.ResponseWriter, r *http.Request) {
 
 	_, err = h.commandBus.Execute(cmd)
 	if err != nil {
+		// Check if it's a not-found error
+		if domain.IsNotFoundError(err) {
+			h.logger.Error().Err(err).Str("ErrorCode", UserGetNotFound).Msg("User not found")
+			response.ErrorResponse(w, http.StatusNotFound, *(response.New(UserGetNotFound, "Not found", "Not able to find a user")))
+			return
+		}
+		// Domain validation error (like negative group ID or same group ID)
 		h.logger.Error().Err(err).Str("ErrorCode", UserDomainError).Msg(err.Error())
 		response.BadRequestDomainError(w, UserDomainError, err.Error())
 		return
