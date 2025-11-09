@@ -21,7 +21,6 @@ A RESTful API for managing tasks and containers within user groups. Built with G
 - Comprehensive logging with request IDs
 
 ## Prerequisites
-
 - [Docker](https://docs.docker.com/get-docker/)
 - [Docker Compose](https://docs.docker.com/compose/install/)
 - Make
