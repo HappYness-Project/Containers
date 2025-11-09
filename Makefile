@@ -14,8 +14,6 @@ help:
 	@echo "make test to run unit tests only"
 	@echo "make test-integration to run integration tests"
 	@echo "make test-all to run all tests (unit + integration)"
-	@echo "make test-db-start to start the test database"
-	@echo "make test-db-stop to stop the test database"
 
 version:
 	@echo $(VERSION)
@@ -52,25 +50,9 @@ watch: start
 logs:
 	@docker-compose -f $(DOCKER_COMPOSE_FILE) -p $(CONTAINER_NAME) logs -f
 
-# Testing targets
-# - test: Unit tests only (internal/, pkg/, cmd/)
-# - test-integration: Integration tests only (tests/integration/)
-# - test-all: All tests (unit + integration)
-# Note: All tests in tests/ folder are integration tests
-
 test:
 	@echo "Running unit tests (excluding tests/ folder)..."
 	go test -v ./internal/... ./pkg/... ./cmd/...
-
-test-db-start:
-	@echo "Starting test database..."
-	@docker compose -f $(DOCKER_COMPOSE_FILE) -p $(CONTAINER_NAME) up -d postgres
-	@echo "Waiting for PostgreSQL to be ready..."
-	@sleep 3
-
-test-db-stop:
-	@echo "Stopping test database..."
-	@docker compose -f $(DOCKER_COMPOSE_FILE) -p $(CONTAINER_NAME) stop postgres
 
 test-integration: test-db-start
 	@echo "Running integration tests..."

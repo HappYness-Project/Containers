@@ -41,3 +41,12 @@ Rebuild:
 ```sh
 make rebuild-docker
 ```
+
+## Quick Commands for testing
+
+| Command | Description |
+|---------|-------------|
+| `make test` | Run unit tests only (fast) |
+| `make test-integration` | Run integration tests only |
+| `make test-all` | Run all tests |
+| `make test-coverage` | Generate coverage report |

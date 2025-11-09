@@ -3,17 +3,11 @@ package integration
 import (
 	"testing"
 
-	taskRepo "github.com/happYness-Project/taskManagementGolang/internal/task/repository"
-	taskcontainerRepo "github.com/happYness-Project/taskManagementGolang/internal/taskcontainer/repository"
-	userRepo "github.com/happYness-Project/taskManagementGolang/internal/user/repository"
-	usergroupRepo "github.com/happYness-Project/taskManagementGolang/internal/usergroup/repository"
 	"github.com/happYness-Project/taskManagementGolang/tests/builders"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
-// TestRepository_GetUsersByGroupIdWithRoles tests the complex join query
-// that retrieves users with their roles in a specific group
 func TestRepository_GetUsersByGroupIdWithRoles(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skipping integration test")
@@ -21,9 +15,6 @@ func TestRepository_GetUsersByGroupIdWithRoles(t *testing.T) {
 
 	cleanup := setupTest(t)
 	defer cleanup()
-
-	userRepository := userRepo.NewUserRepository(testDB)
-	groupRepository := usergroupRepo.NewUserGroupRepository(testDB)
 
 	// Create multiple users
 	admin := builders.NewUserBuilder().
@@ -39,27 +30,27 @@ func TestRepository_GetUsersByGroupIdWithRoles(t *testing.T) {
 		WithEmail("member2@test.com").
 		Build()
 
-	userRepository.CreateUser(*admin)
-	userRepository.CreateUser(*member1)
-	userRepository.CreateUser(*member2)
+	repos.UserRepo.CreateUser(*admin)
+	repos.UserRepo.CreateUser(*member1)
+	repos.UserRepo.CreateUser(*member2)
 
-	adminFromDB, _ := userRepository.GetUserByUserId(admin.UserId)
-	member1FromDB, _ := userRepository.GetUserByUserId(member1.UserId)
-	member2FromDB, _ := userRepository.GetUserByUserId(member2.UserId)
+	adminFromDB, _ := repos.UserRepo.GetUserByUserId(admin.UserId)
+	member1FromDB, _ := repos.UserRepo.GetUserByUserId(member1.UserId)
+	member2FromDB, _ := repos.UserRepo.GetUserByUserId(member2.UserId)
 
 	// Create group with admin
 	group := builders.NewUserGroupBuilder().WithName("Dev Team").MustBuild()
-	groupId, _ := groupRepository.CreateGroupWithUsers(*group, adminFromDB.Id)
+	groupId, _ := repos.UserGroupRepo.CreateGroupWithUsers(*group, adminFromDB.Id)
 
 	// Add members
-	groupRepository.InsertUserGroupUserTable(groupId, member1FromDB.Id)
-	groupRepository.InsertUserGroupUserTable(groupId, member2FromDB.Id)
+	repos.UserGroupRepo.InsertUserGroupUserTable(groupId, member1FromDB.Id)
+	repos.UserGroupRepo.InsertUserGroupUserTable(groupId, member2FromDB.Id)
 
 	// Promote member1 to admin
-	groupRepository.UpdateUserRoleInGroup(groupId, member1FromDB.Id, "admin")
+	repos.UserGroupRepo.UpdateUserRoleInGroup(groupId, member1FromDB.Id, "admin")
 
 	// Test: Get users with roles
-	usersWithRoles, err := userRepository.GetUsersByGroupIdWithRoles(groupId)
+	usersWithRoles, err := repos.UserRepo.GetUsersByGroupIdWithRoles(groupId)
 	require.NoError(t, err)
 	require.Len(t, usersWithRoles, 3)
 
@@ -78,8 +69,6 @@ func TestRepository_GetUsersByGroupIdWithRoles(t *testing.T) {
 	assert.Equal(t, "member", roleMap["member2"])
 }
 
-// TestRepository_GetAllTasksByGroupId tests retrieving all tasks
-// across multiple containers in a group (complex join)
 func TestRepository_GetAllTasksByGroupId(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skipping integration test")
@@ -88,21 +77,16 @@ func TestRepository_GetAllTasksByGroupId(t *testing.T) {
 	cleanup := setupTest(t)
 	defer cleanup()
 
-	userRepository := userRepo.NewUserRepository(testDB)
-	groupRepository := usergroupRepo.NewUserGroupRepository(testDB)
-	containerRepository := taskcontainerRepo.NewContainerRepository(testDB)
-	taskRepository := taskRepo.NewTaskRepository(testDB)
-
 	// Setup: Create user and two groups
 	user := builders.NewUserBuilder().Build()
-	userRepository.CreateUser(*user)
-	userFromDB, _ := userRepository.GetUserByUserId(user.UserId)
+	repos.UserRepo.CreateUser(*user)
+	userFromDB, _ := repos.UserRepo.GetUserByUserId(user.UserId)
 
 	group1 := builders.NewUserGroupBuilder().WithName("Group 1").MustBuild()
 	group2 := builders.NewUserGroupBuilder().WithName("Group 2").MustBuild()
 
-	groupId1, _ := groupRepository.CreateGroupWithUsers(*group1, userFromDB.Id)
-	groupId2, _ := groupRepository.CreateGroupWithUsers(*group2, userFromDB.Id)
+	groupId1, _ := repos.UserGroupRepo.CreateGroupWithUsers(*group1, userFromDB.Id)
+	groupId2, _ := repos.UserGroupRepo.CreateGroupWithUsers(*group2, userFromDB.Id)
 
 	// Create containers in each group
 	container1A := builders.NewTaskContainerBuilder().
@@ -118,9 +102,9 @@ func TestRepository_GetAllTasksByGroupId(t *testing.T) {
 		WithUsergroupId(groupId2).
 		Build()
 
-	containerRepository.CreateContainer(*container1A)
-	containerRepository.CreateContainer(*container1B)
-	containerRepository.CreateContainer(*container2A)
+	repos.TaskContainerRepo.CreateContainer(*container1A)
+	repos.TaskContainerRepo.CreateContainer(*container1B)
+	repos.TaskContainerRepo.CreateContainer(*container2A)
 
 	// Create tasks in different containers
 	task1 := builders.NewTaskBuilder().WithName("Task in 1A").MustBuild()
@@ -128,18 +112,18 @@ func TestRepository_GetAllTasksByGroupId(t *testing.T) {
 	task3 := builders.NewTaskBuilder().WithName("Another in 1A").MustBuild()
 	task4 := builders.NewTaskBuilder().WithName("Task in 2A").MustBuild()
 
-	taskRepository.CreateTask(container1A.Id, *task1)
-	taskRepository.CreateTask(container1B.Id, *task2)
-	taskRepository.CreateTask(container1A.Id, *task3)
-	taskRepository.CreateTask(container2A.Id, *task4)
+	repos.TaskRepo.CreateTask(container1A.Id, *task1)
+	repos.TaskRepo.CreateTask(container1B.Id, *task2)
+	repos.TaskRepo.CreateTask(container1A.Id, *task3)
+	repos.TaskRepo.CreateTask(container2A.Id, *task4)
 
 	// Test: Get all tasks in group 1
-	group1Tasks, err := taskRepository.GetAllTasksByGroupId(groupId1)
+	group1Tasks, err := repos.TaskRepo.GetAllTasksByGroupId(groupId1)
 	require.NoError(t, err)
 	assert.Len(t, group1Tasks, 3)
 
 	// Test: Get all tasks in group 2
-	group2Tasks, err := taskRepository.GetAllTasksByGroupId(groupId2)
+	group2Tasks, err := repos.TaskRepo.GetAllTasksByGroupId(groupId2)
 	require.NoError(t, err)
 	assert.Len(t, group2Tasks, 1)
 
@@ -163,24 +147,21 @@ func TestRepository_GetUserRoleInGroup(t *testing.T) {
 	cleanup := setupTest(t)
 	defer cleanup()
 
-	userRepository := userRepo.NewUserRepository(testDB)
-	groupRepository := usergroupRepo.NewUserGroupRepository(testDB)
-
 	// Create user and group
 	user := builders.NewUserBuilder().Build()
-	userRepository.CreateUser(*user)
-	userFromDB, _ := userRepository.GetUserByUserId(user.UserId)
+	repos.UserRepo.CreateUser(*user)
+	userFromDB, _ := repos.UserRepo.GetUserByUserId(user.UserId)
 
 	group := builders.NewUserGroupBuilder().WithName("Test Group").MustBuild()
-	groupId, _ := groupRepository.CreateGroupWithUsers(*group, userFromDB.Id)
+	groupId, _ := repos.UserGroupRepo.CreateGroupWithUsers(*group, userFromDB.Id)
 
 	// Test: Get role (should be admin)
-	role, err := userRepository.GetUserRoleInGroup(userFromDB.UserId, groupId)
+	role, err := repos.UserRepo.GetUserRoleInGroup(userFromDB.UserId, groupId)
 	require.NoError(t, err)
 	assert.Equal(t, "admin", role)
 
 	// Test: Get role for non-existent user-group relationship
-	_, err = userRepository.GetUserRoleInGroup("non-existent-user", groupId)
+	_, err = repos.UserRepo.GetUserRoleInGroup("non-existent-user", groupId)
 	assert.Error(t, err)
 }
 
@@ -193,9 +174,6 @@ func TestRepository_GetUsersByGroupId(t *testing.T) {
 	cleanup := setupTest(t)
 	defer cleanup()
 
-	userRepository := userRepo.NewUserRepository(testDB)
-	groupRepository := usergroupRepo.NewUserGroupRepository(testDB)
-
 	// Create users
 	users := []*builders.UserBuilder{
 		builders.NewUserBuilder().WithUserName("user1"),
@@ -206,21 +184,21 @@ func TestRepository_GetUsersByGroupId(t *testing.T) {
 	var userIds []int
 	for _, userBuilder := range users {
 		user := userBuilder.Build()
-		userRepository.CreateUser(*user)
-		userFromDB, _ := userRepository.GetUserByUserId(user.UserId)
+		repos.UserRepo.CreateUser(*user)
+		userFromDB, _ := repos.UserRepo.GetUserByUserId(user.UserId)
 		userIds = append(userIds, userFromDB.Id)
 	}
 
 	// Create group with first user as admin
 	group := builders.NewUserGroupBuilder().WithName("Team").MustBuild()
-	groupId, _ := groupRepository.CreateGroupWithUsers(*group, userIds[0])
+	groupId, _ := repos.UserGroupRepo.CreateGroupWithUsers(*group, userIds[0])
 
 	// Add other users
-	groupRepository.InsertUserGroupUserTable(groupId, userIds[1])
-	groupRepository.InsertUserGroupUserTable(groupId, userIds[2])
+	repos.UserGroupRepo.InsertUserGroupUserTable(groupId, userIds[1])
+	repos.UserGroupRepo.InsertUserGroupUserTable(groupId, userIds[2])
 
 	// Test: Get all users in group
-	groupUsers, err := userRepository.GetUsersByGroupId(groupId)
+	groupUsers, err := repos.UserRepo.GetUsersByGroupId(groupId)
 	require.NoError(t, err)
 	assert.Len(t, groupUsers, 3)
 }
@@ -234,47 +212,42 @@ func TestRepository_GetContainersByGroupId(t *testing.T) {
 	cleanup := setupTest(t)
 	defer cleanup()
 
-	userRepository := userRepo.NewUserRepository(testDB)
-	groupRepository := usergroupRepo.NewUserGroupRepository(testDB)
-	containerRepository := taskcontainerRepo.NewContainerRepository(testDB)
-
 	// Setup
 	user := builders.NewUserBuilder().Build()
-	userRepository.CreateUser(*user)
-	userFromDB, _ := userRepository.GetUserByUserId(user.UserId)
+	repos.UserRepo.CreateUser(*user)
+	userFromDB, _ := repos.UserRepo.GetUserByUserId(user.UserId)
 
 	group1 := builders.NewUserGroupBuilder().WithName("Group 1").MustBuild()
 	group2 := builders.NewUserGroupBuilder().WithName("Group 2").MustBuild()
 
-	groupId1, _ := groupRepository.CreateGroupWithUsers(*group1, userFromDB.Id)
-	groupId2, _ := groupRepository.CreateGroupWithUsers(*group2, userFromDB.Id)
+	groupId1, _ := repos.UserGroupRepo.CreateGroupWithUsers(*group1, userFromDB.Id)
+	groupId2, _ := repos.UserGroupRepo.CreateGroupWithUsers(*group2, userFromDB.Id)
 
 	// Create containers
-	containerRepository.CreateContainer(*builders.NewTaskContainerBuilder().
+	repos.TaskContainerRepo.CreateContainer(*builders.NewTaskContainerBuilder().
 		WithName("Container A").
 		WithUsergroupId(groupId1).
 		Build())
-	containerRepository.CreateContainer(*builders.NewTaskContainerBuilder().
+	repos.TaskContainerRepo.CreateContainer(*builders.NewTaskContainerBuilder().
 		WithName("Container B").
 		WithUsergroupId(groupId1).
 		Build())
-	containerRepository.CreateContainer(*builders.NewTaskContainerBuilder().
+	repos.TaskContainerRepo.CreateContainer(*builders.NewTaskContainerBuilder().
 		WithName("Container C").
 		WithUsergroupId(groupId2).
 		Build())
 
 	// Test: Get containers for group 1
-	containers1, err := containerRepository.GetContainersByGroupId(groupId1)
+	containers1, err := repos.TaskContainerRepo.GetContainersByGroupId(groupId1)
 	require.NoError(t, err)
 	assert.Len(t, containers1, 2)
 
 	// Test: Get containers for group 2
-	containers2, err := containerRepository.GetContainersByGroupId(groupId2)
+	containers2, err := repos.TaskContainerRepo.GetContainersByGroupId(groupId2)
 	require.NoError(t, err)
 	assert.Len(t, containers2, 1)
 }
 
-// TestRepository_UserLookupMethods tests various user lookup methods
 func TestRepository_UserLookupMethods(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skipping integration test")
@@ -283,37 +256,34 @@ func TestRepository_UserLookupMethods(t *testing.T) {
 	cleanup := setupTest(t)
 	defer cleanup()
 
-	userRepository := userRepo.NewUserRepository(testDB)
-
 	// Create user
 	user := builders.NewUserBuilder().
 		WithUserName("testuser").
 		WithEmail("test@example.com").
 		Build()
-	userRepository.CreateUser(*user)
+	repos.UserRepo.CreateUser(*user)
 
 	// Test: Get by UserId
-	byUserId, err := userRepository.GetUserByUserId(user.UserId)
+	byUserId, err := repos.UserRepo.GetUserByUserId(user.UserId)
 	require.NoError(t, err)
 	assert.Equal(t, user.UserId, byUserId.UserId)
 
 	// Test: Get by Username
-	byUsername, err := userRepository.GetUserByUsername("testuser")
+	byUsername, err := repos.UserRepo.GetUserByUsername("testuser")
 	require.NoError(t, err)
 	assert.Equal(t, "testuser", byUsername.UserName)
 
 	// Test: Get by Email
-	byEmail, err := userRepository.GetUserByEmail("test@example.com")
+	byEmail, err := repos.UserRepo.GetUserByEmail("test@example.com")
 	require.NoError(t, err)
 	assert.Equal(t, "test@example.com", byEmail.Email)
 
 	// Test: Get all users
-	allUsers, err := userRepository.GetAllUsers()
+	allUsers, err := repos.UserRepo.GetAllUsers()
 	require.NoError(t, err)
 	assert.GreaterOrEqual(t, len(allUsers), 1)
 }
 
-// TestRepository_GetAllTasksByGroupIdOnlyImportant tests filtering important tasks
 func TestRepository_GetAllTasksByGroupIdOnlyImportant(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skipping integration test")
@@ -322,39 +292,34 @@ func TestRepository_GetAllTasksByGroupIdOnlyImportant(t *testing.T) {
 	cleanup := setupTest(t)
 	defer cleanup()
 
-	userRepository := userRepo.NewUserRepository(testDB)
-	groupRepository := usergroupRepo.NewUserGroupRepository(testDB)
-	containerRepository := taskcontainerRepo.NewContainerRepository(testDB)
-	taskRepository := taskRepo.NewTaskRepository(testDB)
-
 	// Setup
 	user := builders.NewUserBuilder().Build()
-	userRepository.CreateUser(*user)
-	userFromDB, _ := userRepository.GetUserByUserId(user.UserId)
+	repos.UserRepo.CreateUser(*user)
+	userFromDB, _ := repos.UserRepo.GetUserByUserId(user.UserId)
 
 	group := builders.NewUserGroupBuilder().WithName("Project").MustBuild()
-	groupId, _ := groupRepository.CreateGroupWithUsers(*group, userFromDB.Id)
+	groupId, _ := repos.UserGroupRepo.CreateGroupWithUsers(*group, userFromDB.Id)
 
 	container := builders.NewTaskContainerBuilder().
 		WithUsergroupId(groupId).
 		Build()
-	containerRepository.CreateContainer(*container)
+	repos.TaskContainerRepo.CreateContainer(*container)
 
 	// Create tasks with different importance
 	task1 := builders.NewTaskBuilder().WithName("Important Task 1").MustBuild()
 	task2 := builders.NewTaskBuilder().WithName("Normal Task").MustBuild()
 	task3 := builders.NewTaskBuilder().WithName("Important Task 2").MustBuild()
 
-	taskRepository.CreateTask(container.Id, *task1)
-	taskRepository.CreateTask(container.Id, *task2)
-	taskRepository.CreateTask(container.Id, *task3)
+	repos.TaskRepo.CreateTask(container.Id, *task1)
+	repos.TaskRepo.CreateTask(container.Id, *task2)
+	repos.TaskRepo.CreateTask(container.Id, *task3)
 
 	// Mark tasks as important
-	taskRepository.UpdateImportantTask(task1.TaskId, true)
-	taskRepository.UpdateImportantTask(task3.TaskId, true)
+	repos.TaskRepo.UpdateImportantTask(task1.TaskId, true)
+	repos.TaskRepo.UpdateImportantTask(task3.TaskId, true)
 
 	// Test: Get only important tasks
-	importantTasks, err := taskRepository.GetAllTasksByGroupIdOnlyImportant(groupId)
+	importantTasks, err := repos.TaskRepo.GetAllTasksByGroupIdOnlyImportant(groupId)
 	require.NoError(t, err)
 	assert.Len(t, importantTasks, 2)
 

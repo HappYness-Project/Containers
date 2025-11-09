@@ -8,6 +8,10 @@ import (
 	"os"
 	"testing"
 
+	taskRepo "github.com/happYness-Project/taskManagementGolang/internal/task/repository"
+	taskcontainerRepo "github.com/happYness-Project/taskManagementGolang/internal/taskcontainer/repository"
+	userRepo "github.com/happYness-Project/taskManagementGolang/internal/user/repository"
+	usergroupRepo "github.com/happYness-Project/taskManagementGolang/internal/usergroup/repository"
 	"github.com/happYness-Project/taskManagementGolang/pkg/configs"
 	"github.com/happYness-Project/taskManagementGolang/pkg/dbs"
 	"github.com/stretchr/testify/require"
@@ -15,10 +19,26 @@ import (
 
 var testDB *sql.DB
 
+// TestRepositories holds all repository instances for easy access in tests
+type TestRepositories struct {
+	UserRepo          *userRepo.UserRepo
+	UserGroupRepo     *usergroupRepo.UserGroupRepo
+	TaskRepo          *taskRepo.TaskRepo
+	TaskContainerRepo *taskcontainerRepo.ContainerRepo
+}
+
+var repos *TestRepositories
+
 // TestMain sets up the test database connection for all integration tests
 func TestMain(m *testing.M) {
+	// Change to tests directory for config loading
+	// InitConfig("") expects to be in tests/ directory where ../dev-env/local.env exists
+	// When running tests, Go sets working dir to tests/integration
+	os.Chdir("..")
+
 	// Load configuration - connects to docker-compose database
 	env := configs.InitConfig("")
+
 	connStr := fmt.Sprintf(
 		"host=%s port=%s user=%s password=%s dbname=%s sslmode=disable timezone=UTC connect_timeout=5",
 		env.DBHost, env.DBPort, env.DBUser, env.DBPwd, env.DBName,
@@ -36,6 +56,14 @@ func TestMain(m *testing.M) {
 	}
 
 	log.Println("Integration tests: Connected to test database")
+
+	// Initialize repositories once for all tests
+	repos = &TestRepositories{
+		UserRepo:          userRepo.NewUserRepository(testDB),
+		UserGroupRepo:     usergroupRepo.NewUserGroupRepository(testDB),
+		TaskRepo:          taskRepo.NewTaskRepository(testDB),
+		TaskContainerRepo: taskcontainerRepo.NewContainerRepository(testDB),
+	}
 
 	// Run tests
 	code := m.Run()
@@ -70,7 +98,7 @@ func cleanDatabase(t *testing.T, db *sql.DB) {
 		"task",               // Tasks
 		"taskcontainer",      // Containers
 		"usergroup",          // Groups
-		"user",               // Users
+		`"user"`,             // Users (quoted because "user" is a reserved keyword in PostgreSQL)
 	}
 
 	for _, table := range tables {
